@@ -13,6 +13,7 @@ as a placeholder for further PDF parsing logic.
 import os
 import imaplib
 import email
+from email.header import decode_header, make_header
 import re
 import sqlite3
 import json
@@ -26,6 +27,14 @@ LOGGER = logging.getLogger(__name__)
 
 DB_PATH = os.environ.get("DB_PATH", "invoices.db")
 WECHAT_WEBHOOK_URL = os.environ.get("WECHAT_WEBHOOK_URL")
+
+
+def decode_mime_words(text: str) -> str:
+    """Decode MIME encoded words to a Unicode string."""
+    try:
+        return str(make_header(decode_header(text)))
+    except Exception:
+        return text
 
 
 def connect_mailbox() -> imaplib.IMAP4_SSL:
@@ -77,7 +86,9 @@ def extract_invoice_info(msg: Message) -> List[dict]:
             results.append(info)
         elif content_type == "text/html":
             html = part.get_payload(decode=True).decode(part.get_content_charset("utf-8"))
-            for match in re.findall(r"https?://[^\s'\"]+\.pdf", html):
+            for match in re.findall(
+                r"https?://[^\s'\"]+\.pdf(?:\?[^\s'\"]*)?", html
+            ):
                 try:
                     with urlopen(match) as resp:
                         pdf_data = resp.read()
@@ -143,7 +154,7 @@ def main():
     failed = []
 
     for msg_id, msg in fetch_unseen_messages(imap):
-        subject = msg.get("Subject", "")
+        subject = decode_mime_words(msg.get("Subject", ""))
         try:
             infos = extract_invoice_info(msg)
             if infos:
