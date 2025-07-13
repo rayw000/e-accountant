@@ -14,6 +14,7 @@ import os
 import imaplib
 import email
 from email.header import decode_header, make_header
+from html import unescape
 import re
 import sqlite3
 import json
@@ -85,9 +86,13 @@ def extract_invoice_info(msg: Message) -> List[dict]:
             info.update({"source": "attachment", "filename": filename})
             results.append(info)
         elif content_type == "text/html":
-            html = part.get_payload(decode=True).decode(part.get_content_charset("utf-8"))
+            html_content = part.get_payload(decode=True).decode(
+                part.get_content_charset("utf-8")
+            )
+            html_content = unescape(html_content)
             for match in re.findall(
-                r"https?://[^\s'\"]+\.pdf(?:\?[^\s'\"]*)?", html
+                r"https?://[^\s'\"]+\.pdf(?:\?[^\s'\"]*)?",
+                html_content,
             ):
                 try:
                     with urlopen(match) as resp:
